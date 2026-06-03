@@ -5,7 +5,8 @@
  * Two independent panes side by side. The active pane has the cursor; Tab
  * switches. F5 / c copies, F6 / m moves the selection from the ACTIVE pane
  * into the OTHER pane's directory -- "copy from left to right". File ops
- * shell out to cp / mv / rm. Files open in $LITEFM_EDITOR (or $EDITOR).
+ * shell out to cp / mv / rm. Files open in $LITEFM_EDITOR, else litefe if
+ * installed, else $EDITOR / nano / vi.
  *
  * Build:  cc -O2 -Wall -o litefm src/litefm.c
  * Keys:   press ? inside the program.
@@ -620,12 +621,40 @@ static int is_text_file(const char *path) {
     }
     return nonprint * 100 / n <= 5;
 }
+/* True if `prog` is an executable found via $PATH (or, if it contains a
+   slash, executable at that exact path). */
+static int in_path(const char *prog) {
+    if (!prog || !prog[0]) return 0;
+    if (strchr(prog, '/')) return access(prog, X_OK) == 0;
+    const char *path = getenv("PATH");
+    if (!path || !path[0]) path = "/usr/local/bin:/usr/bin:/bin";
+    while (*path) {
+        const char *sep = strchr(path, ':');
+        size_t len = sep ? (size_t)(sep - path) : strlen(path);
+        char full[PATH_MAX];
+        if (len == 0) { /* empty element means current directory */
+            if (snprintf(full, sizeof full, "%s", prog) < (int)sizeof full
+                && access(full, X_OK) == 0) return 1;
+        } else if (len + 1 + strlen(prog) + 1 <= sizeof full) {
+            snprintf(full, sizeof full, "%.*s/%s", (int)len, path, prog);
+            if (access(full, X_OK) == 0) return 1;
+        }
+        if (!sep) break;
+        path = sep + 1;
+    }
+    return 0;
+}
+
+/* Choose the editor: an explicit $LITEFM_EDITOR always wins, otherwise prefer
+   litefe if it is installed, then fall back to $EDITOR, nano, and finally vi. */
 static const char *editor(void) {
     const char *e = getenv("LITEFM_EDITOR");
     if (e && e[0]) return e;
+    if (in_path("litefe")) return "litefe";
     e = getenv("EDITOR");
     if (e && e[0]) return e;
-    return "litefe";
+    if (in_path("nano")) return "nano";
+    return "vi";
 }
 
 /* Draw an empty centered, opaque box over the current frame. Writes the box
@@ -1415,7 +1444,7 @@ int main(int argc, char **argv) {
         printf("litefm - minimal two-pane file manager\n"
                "usage: litefm [left-dir] [right-dir]\n"
                "keys:  ? inside the program. q to quit.\n"
-               "env:   LITEFM_EDITOR (else $EDITOR, else litefe), LITEFM_CWD_FILE (cd-on-quit)\n");
+               "env:   LITEFM_EDITOR (else litefe, $EDITOR, nano, vi), LITEFM_CWD_FILE (cd-on-quit)\n");
         return 0;
     }
 

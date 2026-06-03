@@ -33,3 +33,10 @@ sudo cp litefm /usr/local/bin/
 litefm                      # both panes start in the current directory
 litefm ~/projekt ~/backup   # left pane, right pane
 ```
+
+
+## Editor
+
+`F4` / `e` opens the file in `$LITEFM_EDITOR` if set, otherwise in
+[litefe](https://github.com/john3dc/litefe) if it is installed, then `$EDITOR`,
+`nano`, and finally `vi`.
